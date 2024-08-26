@@ -2,47 +2,56 @@ import cv2
 import numpy as np
 import matplotlib.pyplot as plt
 
-# Carregar a imagem
-src = cv2.imread('onion.png', cv2.IMREAD_UNCHANGED)
-image = cv2.cvtColor(src, cv2.COLOR_BGR2RGB)
+# 1. Ler a imagem "onion.png"
+image = cv2.imread('onion.png')
+image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 
-# Converter a imagem para uma matriz de duas dimensões
-pixels = image.reshape((-1, 3))
-pixels = np.float32(pixels)
+# 2. Pre-processamento
+# Aplicar um filtro de desfoque para suavizar a imagem
+blurred_image = cv2.GaussianBlur(image_rgb, (7, 7), 0)
 
-# Definir os critérios de parada e o número de clusters
+# Converter para o espaço de cores LAB para uma melhor segmentação
+lab_image = cv2.cvtColor(blurred_image, cv2.COLOR_RGB2LAB)
+
+# 3. Aplicar o K-Means
+# Reshape a imagem para um vetor 2D de pixels
+pixel_values = lab_image.reshape((-1, 3))
+pixel_values = np.float32(pixel_values)
+
+# Critérios de parada do algoritmo K-Means
 criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 100, 0.2)
-num_clusters = 3
+k = 12 # Número de clusters (você pode ajustar esse valor)
+_, labels, centers = cv2.kmeans(pixel_values, k, None, criteria, 10, cv2.KMEANS_RANDOM_CENTERS)
 
-# Aplicar o k-means
-_, labels, centers = cv2.kmeans(pixels, num_clusters, None, criteria, 10, cv2.KMEANS_RANDOM_CENTERS)
-
-# Converter os centros para valores de 8 bits e as labels para imagem
+# Convertendo de volta os centros para valores de 8 bits
 centers = np.uint8(centers)
 segmented_image = centers[labels.flatten()]
-segmented_image = segmented_image.reshape(image.shape)
+segmented_image = segmented_image.reshape(lab_image.shape)
 
-# Identificar o cluster mais vermelho
-red_cluster_index = np.argmax(centers[:, 0] - centers[:, 1] - centers[:, 2])
+# 4. Selecionar clusters que correspondem à cor da pimenta
+# Converter de volta para o espaço RGB para visualização
+segmented_image_rgb = cv2.cvtColor(segmented_image, cv2.COLOR_LAB2RGB)
 
-# Criar uma máscara para o cluster vermelho
-mask = (labels.flatten() == red_cluster_index)
-mask = mask.reshape(image.shape[:2])
+# Definir intervalos para a cor vermelha
+upper_color = np.array([245, 221, 195])  # Esses valores podem precisar de ajustes
+lower_color = np.array([110, 90, 35])
 
-# Aplicar a máscara para segmentar a pimenta vermelha
-segmented_red_pepper = cv2.bitwise_and(image, image, mask=mask.astype(np.uint8))
+# Criar uma máscara para a cor vermelha
+mask = cv2.inRange(segmented_image_rgb, lower_color, upper_color)
+result = cv2.bitwise_and(image_rgb, image_rgb, mask=mask)
 
-# Criar um layout com duas colunas para exibir as imagens lado a lado
-plt.figure(figsize=(12, 6))
-
-plt.subplot(1, 2, 1)
-plt.imshow(image)
+# Exibir os resultados
+plt.figure(figsize=(10, 5))
+plt.subplot(1, 3, 1)
 plt.title('Imagem Original')
-plt.axis('off')
+plt.imshow(image_rgb)
 
-plt.subplot(1, 2, 2)
-plt.imshow(segmented_red_pepper)
-plt.title('Pimenta Vermelha Segmentada')
-plt.axis('off')
+plt.subplot(1, 3, 2)
+plt.title('Imagem Segmentada')
+plt.imshow(segmented_image_rgb)
+
+plt.subplot(1, 3, 3)
+plt.title('Segmentação da Pimenta Vermelha')
+plt.imshow(segmented_image_rgb)
 
 plt.show()
